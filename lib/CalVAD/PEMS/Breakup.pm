@@ -44,8 +44,7 @@ class Breakup using Moose : ro {
     }
 
 
-    sub _build__connection_psql {
-        my $self = shift;
+    method _build__connection_psql {
         my ( $host, $port, $dbname, $username, $password ) =
           map { $self->$_ }
           map { join q{_}, $_, $param }

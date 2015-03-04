@@ -69,6 +69,8 @@ is(scalar @{$warnings},0,"no warnings on object creation");
 isnt($obj, undef, 'object creation should work with all required fields');
 like($obj,qr/CalVAD::PEMS::Breakup/,'it is okay');
 
+can_ok($obj,qw(_connection_psql create_db fetch_vds_metadata track copy_in breakup ));
+
 my $connect;
 eval {
   $connect = $obj->_connection_psql;
