@@ -8,25 +8,12 @@ use Pod::Usage;
 use Text::CSV;
 use IO::File;
 use IO::Uncompress::Gunzip qw(gunzip $GunzipError);
-use File::Find;
+
+use CalVAD::PEMS::Breakup;
 
 use English qw(-no_match_vars);
 
-use DB::CouchDB;
-use Testbed::Spatial::VDS::Schema::Public;
-
-use DateTime::Format::DateParse;
-use DateTime::Format::Pg;
-
-use File::Path qw(make_path);
-
-use FindBin;
-use lib "$FindBin::Bin/lib";
-use PEMS::Parse;
-
-#use DateTime::Duration;
-
-use version; our $VERSION = qv('0.0.4.5');
+use version; our $VERSION = qv('0.2.0');
 
 # this script breaks up daily pems files into annual by vdsid
 
@@ -40,20 +27,18 @@ my $year;
 my $district;
 my $path;
 my $help;
-my $deletedb;
 my $shrink   = 1;
 my $pretty   = 0;
-my $dumpsize = 400000;
 my $outdir   = q{.};
 
 my $user   = $ENV{PSQL_USER} || q{};
-my $pass   = $ENV{PSQL_PASS} || q{};
+my $pass   = q{}; # never use a postgres password, use config file or .pgpass
 my $host   = $ENV{PSQL_HOST} || '127.0.0.1';
 my $dbname = $ENV{PSQL_DB}   || 'spatialvds';
 my $port   = $ENV{PSQL_PORT} || 5432;
 
 my $cdb_user   = $ENV{COUCHDB_USER} || q{};
-my $cdb_pass   = $ENV{COUCHDB_PASS} || q{};
+my $cdb_pass   = $ENV{COUCHDB_PASS} || q{}; # need a config file for this
 my $cdb_host   = $ENV{COUCHDB_HOST} || '127.0.0.1';
 my $cdb_dbname = $ENV{COUCHDB_DB}   || 'pems_brokenup';
 my $cdb_port   = $ENV{COUCHDB_PORT} || '5984';
@@ -63,21 +48,17 @@ my $uniquebit;
 
 my $result = GetOptions(
     'username:s'  => \$user,
-    'password:s'  => \$pass,
     'host:s'      => \$host,
     'db:s'        => \$dbname,
     'port:i'      => \$port,
     'cusername:s' => \$cdb_user,
-    'cpassword:s' => \$cdb_pass,
     'chost:s'     => \$cdb_host,
     'cdb:s'       => \$cdb_dbname,
     'cport:i'     => \$cdb_port,
     'year=i'      => \$year,
     'district=i'  => \$district,
     'path=s'      => \$path,
-    'delete'      => \$deletedb,
     'reparse'     => \$reparse,
-    'bulksize=i'  => \$dumpsize,
     'outdir=s'    => \$outdir,
     'help|?'      => \$help
 );
@@ -106,47 +87,10 @@ sub loadfiles {
     }
     return;
 }
-find( \&loadfiles, $path );
+File::Find::find( \&loadfiles, $path );
 
 @files = sort { $a cmp $b } @files;
 carp 'going to process ', scalar @files, ' files';
-
-# PeMS documentation:
-# CSV (ASCII) - Station Raw
-# Raw detector data as reported by the district. Each line contains
-# sample time, and station id followed by flow, occupancy and speed for
-# each lane. Note that occupancy and/or speed may be empty depending on
-# the measurement capabilities of the detectors.
-#
-# Column 	Units 	Description
-#
-# Timestamp: : Sample time as reported by the field element as
-#              MM/DD/YYYY HH24:MI:SS.
-#
-# Station: :Unique station identifier. Use this value to
-#           cross-reference with Metadata files.
-#
-
-my $slurpcode = sub {
-    my ( $z, $store ) = @_;
-    while ( my $line = $z->getline() ) {
-
-        # get the date, time, and vdsid, using grep
-        if ( $line =~
-            /^(\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}:\d{2})\s*,\s*(\d+),/sxm )
-        {
-            my $id = $2;
-            if ( !defined( $store->{$id} ) ) {
-                $store->{$id} = [];
-            }
-            push @{ $store->{$id} }, $line;
-        }
-        else {
-            croak "regex failed on $line";
-        }
-    }
-    return;
-};
 
 # make sure the outdir is a directory that is writable
 if ( not( -d $outdir && -w $outdir ) ) {
@@ -156,14 +100,14 @@ if ( not( -d $outdir && -w $outdir ) ) {
 }
 carp "creating the parser";
 
-my $parser = 'PEMS::Parse'->new(
+my $parser = CalVAD::PEMS::Breakup->new(
 
     # first the sql role
     'host_psql'     => $host,
     'port_psql'     => $port,
     'dbname_psql'   => $dbname,
     'username_psql' => $user,
-    'password_psql' => $pass,
+    'password_psql' => $pass, # never use sql password, use .pgpass
 
     # now the couchdb role
     'host_couchdb'     => $cdb_host,
@@ -173,7 +117,6 @@ my $parser = 'PEMS::Parse'->new(
     'password_couchdb' => $cdb_pass,
     'create'           => 1,
 
-    'inner_loop_method' => $slurpcode,
     'output_dir'        => $outdir,
     'year'              => $year,
     'district'          => $district,
@@ -268,10 +211,6 @@ __END__
 
     breakup_pems_raw - breakup those pesky daily pems files
 
-=head1 VERSION
-
-    this is the 4th version.  version 0.0.4, I guess.
-
 =head1 USAGE
 
     perl -w breakup_pems_raw.pl --path /data/pems/downloaded/raw/data --district 3 --out /data/pems/breakup --year 2010 --reparse > bpr_03.txt 2>&1 &
@@ -298,13 +237,11 @@ __END__
        -help     brief help message
 
        -username optional, username for the pg database
-       -password optional, password for the pg database
        -host     optional, host to use for postgres
        -db       optional, database to use for postgres, defaults to spatialvds
        -port     optional, defaults to pg standard
 
        -cusername  optional,  couchdb user
-       -cpassword  optional,  couchdb pass
        -chost      optional,  couchdb host, default localhost
        -cdb        optional,  couchdb dbname, default pemsrawdocs
        -cport      optional,  couchdb port, default couchdb-standard 5984
@@ -313,7 +250,7 @@ __END__
      environment variables:
 
      $ENV{PSQL_USER} || q{};
-     $ENV{PSQL_PASS} || q{};
+     $ENV{PSQL_PASS} || q{};  # leave as is, use .pgpass file instead
      $ENV{PSQL_HOST} || '127.0.0.1';
      $ENV{PSQL_DB}   || 'spatialvds';
      $ENV{PSQL_PORT} || 5432;
@@ -336,31 +273,14 @@ __END__
 
    I'm for the environment!
 
-=head1 DEPENDENCIES
-
-Text::CSV;
-IO::File;
-IO::Uncompress::Gunzip
-DB::CouchDB;
-DateTime::Format::DateParse;
-
-
-=head1 INCOMPATIBILITIES
-
-none known
-
-=head1 BUGS AND LIMITATIONS
-
-=head1 AUTHOR
-
-James E. Marca, UC Irvine ITS
-jmarca@translab.its.uci.edu
 
 =head1 LICENSE AND COPYRIGHT
 
-This program is free software, (c) 2009 James E Marca under the same terms as Perl itself.
+This program is free software, (c) 2015 James E Marca under the same terms as Perl itself.
 
 =head1 DESCRIPTION
 
-    B<This program> will read the given input file(s) and save the data to the specified
-    couchdb as documents (at the moment, one document per file).
+    B<This program> will read the given input file(s) and save the
+    broken up data to various per-detector files at the output
+    directory, and track the files processed in the specified couchdb
+    as documents.
