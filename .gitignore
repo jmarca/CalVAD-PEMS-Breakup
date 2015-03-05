@@ -1,2 +1,4 @@
 *~
 /.build/
+/config.json
+/test.config.json

@@ -9,6 +9,8 @@ use Text::CSV;
 use IO::File;
 use IO::Uncompress::Gunzip qw(gunzip $GunzipError);
 
+use Config::Any; # config db credentials with config.json
+
 use CalVAD::PEMS::Breakup;
 
 use English qw(-no_match_vars);
@@ -17,34 +19,60 @@ use version; our $VERSION = qv('0.2.0');
 
 # this script breaks up daily pems files into annual by vdsid
 
-#some global variables for bulk doc calls
-my @trackdocs  = ();
-my @big_update = ();
-
 #### This is the part where options are set
 
-my $year;
-my $district;
-my $path;
+##################################################
+# read the config file
+##################################################
+my $config_file = './config.json';
+my $cfg = {};
+
+# check if right permissions on file, if so, use it
+my $mode = (stat($config_file))[2];
+my $str_mode = sprintf "%04o", $mode;
+if( $str_mode == 100600 ){
+
+    $cfg = Config::Any->load_files({files => [$config_file],
+                                    flatten_to_hash=>1,
+                                    use_ext => 1,
+                                   });
+    # simplify the hashref down to just the one file
+    $cfg = $cfg->{$config_file};
+}else{
+    croak "permissions for $config_file are $str_mode.  Set permissions to 0600 (only the user can read or write)";
+}
+##################################################
+# translate config file into variables, for command line override
+##################################################
+
+my $year     = $cfg->{'year'};
+my $district = $cfg->{'district'};
+my $path     = $cfg->{'path'};
 my $help;
-my $shrink   = 1;
-my $pretty   = 0;
-my $outdir   = q{.};
+my $outdir = $cfg->{'outdir'} || q{.};
 
-my $user   = $ENV{PSQL_USER} || q{};
-my $pass   = q{}; # never use a postgres password, use config file or .pgpass
-my $host   = $ENV{PSQL_HOST} || '127.0.0.1';
-my $dbname = $ENV{PSQL_DB}   || 'spatialvds';
-my $port   = $ENV{PSQL_PORT} || 5432;
+my $user = $cfg->{'postgresql'}->{'username'} || $ENV{PSQL_USER} || q{};
+my $pass = $cfg->{'postgresql'}->{'password'}
+  || q{};    # never use a postgres password, use config file or .pgpass
+my $host = $cfg->{'postgresql'}->{'host'} || $ENV{PSQL_HOST} || '127.0.0.1';
+my $dbname =
+     $cfg->{'postgresql'}->{'breakup_pems_raw_db'}
+  || $ENV{PSQL_DB}
+  || 'spatialvds';
+my $port = $cfg->{'postgresql'}->{'port'} || $ENV{PSQL_PORT} || 5432;
 
-my $cdb_user   = $ENV{COUCHDB_USER} || q{};
-my $cdb_pass   = $ENV{COUCHDB_PASS} || q{}; # need a config file for this
-my $cdb_host   = $ENV{COUCHDB_HOST} || '127.0.0.1';
-my $cdb_dbname = $ENV{COUCHDB_DB}   || 'pems_brokenup';
-my $cdb_port   = $ENV{COUCHDB_PORT} || '5984';
+my $cdb_user =
+  $cfg->{'couchdb'}->{'auth'}->{'username'} || $ENV{COUCHDB_USER} || q{};
+my $cdb_pass = $cfg->{'couchdb'}->{'auth'}->{'password'}
+  || q{};
+my $cdb_host = $cfg->{'couchdb'}->{'host'} || $ENV{COUCHDB_HOST} || '127.0.0.1';
+my $cdb_dbname =
+     $cfg->{'couchdb'}->{'breakup_pems_raw_db'}
+  || $ENV{COUCHDB_DB}
+  || 'pems_brokenup';
+my $cdb_port = $cfg->{'couchdb'}->{'port'} || $ENV{COUCHDB_PORT} || '5984';
 
-my $reparse;
-my $uniquebit;
+my $reparse = $cfg->{'reparse'} || q{};
 
 my $result = GetOptions(
     'username:s'  => \$user,
@@ -73,14 +101,24 @@ my $rs;    # where to put db responses
 if ( !$district ) {
     croak 'a district is required!';
 }
+if ( !$year ) {
+    croak 'a year is required!';
+}
+
+# make sure the outdir is a directory that is writable
+if ( not( -d $outdir && -w $outdir ) ) {
+    carp
+"Output directory: [$outdir] does not exist.  It will be created unless you abort now";
+    sleep 2;
+}
 
 my $pattern = join q{_}, $district < 10 ? "d0$district" : "d$district",
   qw{ text station raw }, $year;
 $pattern = join q{}, $pattern, '.*gz';
 
-carp "directory path is $path, pattern is $pattern";
-my @files = ();
+carp "using $pattern to search for files below the directory $path";
 
+my @files = ();
 sub loadfiles {
     if (-f) {
         push @files, grep { /$pattern/sxm } $File::Find::name;
@@ -89,17 +127,12 @@ sub loadfiles {
 }
 File::Find::find( \&loadfiles, $path );
 
+# sorting the files makes it easier to follow along progress by
+# reading log messages
 @files = sort { $a cmp $b } @files;
 carp 'going to process ', scalar @files, ' files';
 
-# make sure the outdir is a directory that is writable
-if ( not( -d $outdir && -w $outdir ) ) {
-    carp
-"Output directory: [$outdir] does not exist.  It will be created unless you abort now";
-    sleep 2;
-}
 carp "creating the parser";
-
 my $parser = CalVAD::PEMS::Breakup->new(
 
     # first the sql role
@@ -216,14 +249,60 @@ __END__
     perl -w breakup_pems_raw.pl --path /data/pems/downloaded/raw/data --district 3 --out /data/pems/breakup --year 2010 --reparse > bpr_03.txt 2>&1 &
 
 
+=head1 CONFIGURATION FILE
+
+All options can be set in a configuration file called "config.json"
+placed in the same directory as this program.  This file should be
+chmod 0600, or your passwords will exposed to others.  Therefore, if
+this file is not made readable and writable only by the file user,
+then this file will not be used.
+
+An example config.json file.  Note that this must be JSON, and so all
+quotes must be double quotes, all commas must come at the end of
+the line, no comments, and no dangling commas.
+
+{
+    "couchdb": {
+        "host": "192.168.0.1",
+        "port":5984,
+        "breakup_pems_raw_db": "pems_brokenup",
+        "auth":{"username":"james",
+                "password":"admin party mode oh my"
+               }
+    },
+    "postgresql":{
+        "host":"192.168.0.1",
+        "port":5432,
+        "username":"james",
+        "password":"super secret postgresql password",
+        "breakup_pems_raw_db":"spatialvds"
+    }
+}
+
+Note that for postgresql, it is not necessary to add the password if
+you are using the .pgpass file that postgresql recommends.  Also note
+that due to historical accident, there is a difference in how I parse
+the auth stuff for postgres and couchdb.  If you must know, it is
+because couchdb is very much like a web client, and so in javascript I
+can plonk that config hash right in the request params and it will set
+the auth for the request properly.
+
+The command line options, listed below, will override these config file values.
+
+There is no command line option for passwords.  This is deliberate, so
+that you don't expose usernames and passwords to any local user's
+invocation of 'ps'.
+
 =head1 REQUIRED ARGUMENTS
 
+These need to be set either in the config file or on the command line.
+The command line will override the config file.
+
        -district the district number (1 through 12) you are trying to process
-       -month    the month of the year (1 through 12) you are trying to process
-       -year     the year (for example, 2007) of the month you are trying to process
+       -year     the year (for example, 2007) you are trying to process
        -path     the directory in which the target raw PeMS data files reside
 
-   (the district, month, and year will be combined to create a couchdb db name that will accept the data)
+   The district and year are used to match the source PeMS files, and to help name the output files.
 
 
 =head1 OPTIONS
