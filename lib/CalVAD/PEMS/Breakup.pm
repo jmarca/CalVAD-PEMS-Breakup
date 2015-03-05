@@ -289,7 +289,7 @@ The methods are documented in the order in which they are used in the script bre
 
 How to create a new parser object.  The new method takes several parameters for creating the couchdb and postgresql database connections, as well as three that relate to this module.
 
-my $parser = 'PEMS::Parse'->new(
+my $parser = CalVAD::PEMS::Breakup->new(
 
     # first the sql role
     'host_psql'     => $host,
