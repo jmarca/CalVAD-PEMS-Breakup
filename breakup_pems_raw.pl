@@ -303,6 +303,11 @@ the line, no comments, and no dangling commas.
         "password":"super secret postgresql password",
         "breakup_pems_raw_db":"spatialvds"
     }
+    "year":2012,
+    "district":12,
+    "path":"/data/from/pems/raw/",
+    "outdir":"/data/brokenup/pems/",
+    "reparse":0
 }
 
 Note that for postgresql, it is not necessary to add the password if
