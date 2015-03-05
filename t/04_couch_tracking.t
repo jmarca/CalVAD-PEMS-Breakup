@@ -44,6 +44,47 @@ isnt($chost,undef,'need a valid host defined in env COUCHDB_HOST');
 my $obj;
 my $warnings;
 
+##################################################
+# first with a fake username that should not be able to create dbs
+##################################################
+
+$warnings = [warnings{
+    $obj = CalVAD::PEMS::Breakup->new(
+        # first the sql role
+        'host_psql'     => $host,
+        'port_psql'     => $port,
+        'dbname_psql'   => $db,
+        'username_psql' => $user,
+        'password_psql' => $pass, # never use sql password, use .pgpass
+
+        # now the couchdb role
+        'host_couchdb'     => $chost,
+        'port_couchdb'     => $cport,
+        'dbname_couchdb'   => $cdb,
+        'username_couchdb' => 'asgasg',
+        'password_couchdb' => 'agasgasdg',
+        'create'           => 1,
+
+        'output_dir'        => $outdir,
+        'year'              => $year,
+        'district'          => $district,
+        );
+             }];
+
+is(scalar @{$warnings},0,"no warnings on object creation");
+
+like(
+    exception { $obj->create_db; },
+    qr/cannot find or create couchdb database/,
+    'db creation died as expected',
+);
+
+
+
+############################################################
+# now with the specified user, pass
+############################################################
+
 $warnings = [warnings{
     $obj = CalVAD::PEMS::Breakup->new(
         # first the sql role
@@ -72,15 +113,24 @@ is(scalar @{$warnings},0,"no warnings on object creation");
 $warnings = [warnings{$obj->create_db;}];
 is(scalar @{$warnings},0,"no warnings on couchdb temp db creation");
 
+$warnings = [warnings{$obj->create_db;}];
+is(scalar @{$warnings},0,"will silently ignore failure to create a db that already exists");
+
 # test the tracking bits and bobs, even though that should work
 # because of the couchdb lib's tests, but hey, sue me
 
 $obj->track( 'id' => './files/d12_text_station_raw_2012_10_01.txt.gz',
+             'processed' => 1,
+             'row' => 100,
              'otherdata' => { 'broken_parse' => 'choked on vomit' },
     );
 
 my $testdoc = $obj->get_doc('./files/d12_text_station_raw_2012_10_01.txt.gz');
 is($testdoc->{'broken_parse'},'choked on vomit','parser can also track via couchdb');
+
+# check that "track" functionality works okay
+my $done = $obj->track('id'=>'./files/d12_text_station_raw_2012_10_01.txt.gz');
+is($done,-1,'setting processed in track object works okay');
 
 
 # delete the test db
