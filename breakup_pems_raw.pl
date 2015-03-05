@@ -58,15 +58,15 @@ my $path     = $cfg->{'path'};
 my $help;
 my $outdir = $cfg->{'outdir'} || q{};
 
-my $user = $cfg->{'postgresql'}->{'username'} || $ENV{PSQL_USER} || q{};
+my $user = $cfg->{'postgresql'}->{'username'} || $ENV{PGUSER} || q{};
 my $pass = $cfg->{'postgresql'}->{'password'}
   || q{};    # never use a postgres password, use config file or .pgpass
-my $host = $cfg->{'postgresql'}->{'host'} || $ENV{PSQL_HOST} || '127.0.0.1';
+my $host = $cfg->{'postgresql'}->{'host'} || $ENV{PGHOST} || '127.0.0.1';
 my $dbname =
      $cfg->{'postgresql'}->{'breakup_pems_raw_db'}
-  || $ENV{PSQL_DB}
+  || $ENV{PGDATABASE}
   || 'spatialvds';
-my $port = $cfg->{'postgresql'}->{'port'} || $ENV{PSQL_PORT} || 5432;
+my $port = $cfg->{'postgresql'}->{'port'} || $ENV{PGPORT} || 5432;
 
 my $cdb_user =
   $cfg->{'couchdb'}->{'auth'}->{'username'} || $ENV{COUCHDB_USER} || q{};
@@ -354,11 +354,11 @@ The command line will override the config file.
      the database options can also be read from the following
      environment variables:
 
-     $ENV{PSQL_USER} || q{};
-     $ENV{PSQL_PASS} || q{};  # leave as is, use .pgpass file instead
-     $ENV{PSQL_HOST} || '127.0.0.1';
-     $ENV{PSQL_DB}   || 'spatialvds';
-     $ENV{PSQL_PORT} || 5432;
+     $ENV{PGUSER} || q{};
+     $ENV{PGPASS} || q{};  # leave as is, use .pgpass file instead
+     $ENV{PGHOST} || '127.0.0.1';
+     $ENV{PGDATABASE}   || 'spatialvds';
+     $ENV{PGPORT} || 5432;
 
      $ENV{COUCHDB_USER} || q{};
      $ENV{COUCHDB_PASS} || q{};
