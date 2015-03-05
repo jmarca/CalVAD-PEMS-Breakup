@@ -28,19 +28,26 @@ my $config_file = './config.json';
 my $cfg = {};
 
 # check if right permissions on file, if so, use it
-my $mode = (stat($config_file))[2];
-my $str_mode = sprintf "%04o", $mode;
-if( $str_mode == 100600 ){
+if( -e $config_file){
+    my @mode = (stat($config_file));
+    my $str_mode = sprintf "%04o", $mode[2];
+    if( $str_mode == 100600 ){
 
-    $cfg = Config::Any->load_files({files => [$config_file],
-                                    flatten_to_hash=>1,
-                                    use_ext => 1,
-                                   });
-    # simplify the hashref down to just the one file
-    $cfg = $cfg->{$config_file};
-}else{
-    croak "permissions for $config_file are $str_mode.  Set permissions to 0600 (only the user can read or write)";
+        $cfg = Config::Any->load_files({files => [$config_file],
+                                        flatten_to_hash=>1,
+                                        use_ext => 1,
+                                       });
+        # simplify the hashref down to just the one file
+        $cfg = $cfg->{$config_file};
+    }else{
+        croak "permissions for $config_file are $str_mode.  Set permissions to 0600 (only the user can read or write)";
+    }
 }
+else{
+  # if no config file, then just note that and move on
+    carp "no config file $config_file found";
+}
+
 ##################################################
 # translate config file into variables, for command line override
 ##################################################
@@ -49,7 +56,7 @@ my $year     = $cfg->{'year'};
 my $district = $cfg->{'district'};
 my $path     = $cfg->{'path'};
 my $help;
-my $outdir = $cfg->{'outdir'} || q{.};
+my $outdir = $cfg->{'outdir'} || q{};
 
 my $user = $cfg->{'postgresql'}->{'username'} || $ENV{PSQL_USER} || q{};
 my $pass = $cfg->{'postgresql'}->{'password'}
@@ -99,10 +106,20 @@ if ( !$result || $help ) {
 
 my $rs;    # where to put db responses
 if ( !$district ) {
-    croak 'a district is required!';
+    carp 'a district is required!';
+    pod2usage(1);
 }
 if ( !$year ) {
-    croak 'a year is required!';
+    carp 'a year is required!';
+    pod2usage(1);
+}
+if ( !$path ) {
+    carp 'a path is required!';
+    pod2usage(1);
+}
+if ( !$outdir ) {
+    carp 'an output directory (-outdir) is required!';
+    pod2usage(1);
 }
 
 # make sure the outdir is a directory that is writable
@@ -156,8 +173,15 @@ my $parser = CalVAD::PEMS::Breakup->new(
 );
 
 # first some useful subroutines
+carp "checking that couchdb $cdb_dbname exists and creating if not";
 $parser->create_db;
-$parser->fetch_vds_metadata;
+
+carp "getting vds metadata from postgresql database $dbname";
+my $check;
+eval{$parser->fetch_vds_metadata;};
+if($@){
+    carp " there was a problem accessing the database.  Check to make sure that the username, password, and host are correct.  The error message (probably unhelpful) is\n$@";
+}
 
 # main program loop
 
@@ -227,7 +251,9 @@ sub checkfiles {
     }
     return;
 }
-find( \&checkfiles, $searchpath );
+File::Find::find( \&checkfiles, $searchpath );
+
+@processedfiles = sort { $a cmp $b } @processedfiles;
 
 for my $bf (@processedfiles){
     my @sargs = ("xz", $bf);
