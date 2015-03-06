@@ -38,6 +38,29 @@ dzil listdeps --missing | cpanm --sudo
 
 ## Testing
 
+Configuration of the tests is done using the file `test.config.json.
+This file controls options to access databases.  An example is:
+
+```javascript
+{
+    "couchdb": {
+        "host": "127.0.0.1",
+        "port":5984,
+        "breakup_pems_raw_db": "test_calvad_pems_brokenup",
+        "auth":{"username":"james",
+                "password":"this is my couchdb passwrod"
+               }
+    },
+    "postgresql":{
+        "host":"192.168.0.1",
+        "port":5432,
+        "username":"james",
+        "password":"my secret stapler horse",
+        "breakup_pems_raw_db":"spatialvds"
+    }
+}
+```
+
 To run the tests, you can also use dzil
 
 ```
@@ -75,3 +98,25 @@ I prefer the second way.  You have to be sudo to install the module
 in the global perl library, but there is no need to be sudo to run the
 tests.  This second way uses the "sudo" flag for cpanm only when
 installing, not for testing.
+
+# Running the script to breakup and transpose the data
+
+To actually run the program, do
+
+```
+perl -w breakup_pems_raw.pl
+```
+
+If you just run this, it will dump out a hopefully helpful
+documentation of the command line options.
+
+You can configure either with command line switches, or with a file
+named `config.json`, or both.
+
+The `config.json` can be like the test config file, except you can
+also set command line switches too, like the year and the district.
+
+Don't forget to set the config.json files to be mode 0600.  Not sure
+what that means in windows, so you should probably run this on mac or
+Linux.  Don't worry if you don't set that mode...the program will
+crash and remind you in a Pavlovian punishment scheme.
