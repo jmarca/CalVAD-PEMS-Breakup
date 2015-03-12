@@ -105,7 +105,7 @@ class Breakup using Moose : ro {
            vv.lanes, vv.segment_length, vv.version, vf.freeway_id,
            vf.freeway_dir, vt.type_id AS vdstype, vd.district_id AS district,
            ST_AsEWKT(g.geom) as geom,
-   regexp_replace(v.cal_pm,E'[^[:digit:]^\\.]','','g')::numeric as cal_pm_numeric
+    regexp_replace(regexp_replace(v.cal_pm,E'[^[:digit:]^\\.]','','g'),E'\\.$','')::numeric as cal_pm_numeric
     FROM vds_id_all v
     JOIN (
         SELECT vds_versioned.* from vds_versioned join (select id,max(version) as version from vds_versioned group by id )vmax USING (id,version)
