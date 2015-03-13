@@ -127,6 +127,6 @@ $warnings = [warnings{
 is(scalar @{$warnings},0,"no warnings fetching vds metadata");
 
 my $vds_info = $obj->vds_info;
-is(scalar keys %{$vds_info},17231,'got all the vds sites');
+is(scalar keys %{$vds_info},17938,'got all the vds sites');
 
 done_testing();
