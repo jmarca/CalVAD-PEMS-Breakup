@@ -2,6 +2,7 @@ use Test::Modern; # see done_testing()
 use Carp;
 use Data::Dumper;
 use Config::Any; # config db credentials with config.json
+use v5.16;
 
 use File::Temp qw/tempdir /;
 use English qw(-no_match_vars);
@@ -134,6 +135,7 @@ $z->close();
 is(scalar @{$w},0,'no problems parsing file');
 $store = $obj->store;
 is(scalar keys %{$store},2013,'got the right number of detectors');
+
 $sumlines = 0;
 for(keys %{$store}){
     like($_,qr/^12\d+$/,'detector id looks like a detector id');
@@ -145,7 +147,14 @@ for(keys %{$store}){
 is($sumlines,5603866,'read in every line');
 
 
+my @t;
+$t[0]= time();
+
+# do some stuff
 $obj->breakup;
+
+$t[1] = time();
+
 
 # side effect only, it should have written out to the filesystem
 @files=();
@@ -153,9 +162,9 @@ File::Find::find( \&loadfiles, $outdir );
 
 is(scalar @files,scalar keys %{$detectors},'wrote one file per detector');
 
-##################################################
-# another file
-##################################################
+# ##################################################
+# # another file
+# ##################################################
 $file = File::Spec->rel2abs('./t/files/d12_text_station_raw_2012_10_02.txt.gz');
 $z = IO::Uncompress::Gunzip->new($file)
     or croak "IO::Uncompress::Gunzip failed: $GunzipError\n";
@@ -175,19 +184,38 @@ for(keys %{$store}){
 is($sumlines,5550455,'read in every line');
 
 
+$t[2]= time();
+
+# do some stuff
 $obj->breakup;
+
+$t[3] = time();
+
 
 # side effect only, it should have written out to the filesystem
 @files=();
-sub loadfiles {
-    if (-f) {
-        push @files, grep { /\.txt$/sxm } $File::Find::name;
-    }
-    return;
-}
 File::Find::find( \&loadfiles, $outdir );
 
 is(scalar @files,scalar keys %{$detectors},'wrote one file per detector');
 
 
 done_testing();
+
+my $diff = formatted_time_diff($t[0],$t[1]);
+
+say "Processing 1 took $diff seconds\n";
+
+$diff = formatted_time_diff($t[2],$t[3]);
+
+say "Processing 2 took $diff seconds\n";
+
+sub formatted_time_diff {
+    return sprintf("%.2f", $_[1]-$_[0])
+}
+
+sub loadfiles {
+    if (-f) {
+        push @files, grep { /\.txt$/sxm } $File::Find::name;
+    }
+    return;
+}
