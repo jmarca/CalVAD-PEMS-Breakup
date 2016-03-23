@@ -80,6 +80,7 @@ is(scalar @{$warnings},0,"no warnings on object creation");
 @files=();
 File::Find::find( \&loadfiles, $outdir . '/D03/' );
 is(scalar @files,2,'moved another file in 2010');
+@files = sort @files;
 is($files[0],'t/files/D03/80/W/JWO_ENTERPRISE_BL/317033_ML_2010.txt.xz','fixed the path and detector type');
 is($files[1],'t/files/D03/80/W/JWO_ENTERPRISE_BL/317033_ML_2012.txt','fixed the path and detector type');
 
