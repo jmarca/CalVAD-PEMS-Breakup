@@ -235,6 +235,33 @@ FINIS
         return $self->vds_info->{$id}->{'sanitized_name'};
       }
 
+    method make_filename( Int $id) {
+                        # make it for next time
+
+        my $info           = $self->vds_info->{$id};
+        my $sanitized_name = $self->sanitize_name($id);
+        if ( !$sanitized_name ) {
+            $sanitized_name = '_name_';
+        }
+        my $d =
+            $self->district < 10
+            ? 'D0' . $self->district
+            : 'D' . $self->district;
+        my $path = $self->output_dir;
+        for (  $d, $info->{'freeway_id'}, $info->{'freeway_dir'}, $sanitized_name){
+            if($_){
+                $path .=  q{/} . $_;
+            }
+        }
+        if ( !-e $path ) {
+            make_path($path);
+        }
+        my $filename = join q{_}, $id, $info->{'vdstype'}, $self->year;
+        $filename .= '.txt';
+        my $absname = join q{/}, $path, $filename;
+        return $absname;
+    }
+
       method breakup {
         my $store = $self->store;
         for my $id ( keys %{$store} ) {
@@ -245,28 +272,7 @@ FINIS
             my $absname = $self->handles->{$id};
             if(! defined $absname){
                 # make it for next time
-
-                my $info           = $self->vds_info->{$id};
-                my $sanitized_name = $self->sanitize_name($id);
-                if ( !$sanitized_name ) {
-                    $sanitized_name = '_name_';
-                }
-                my $d =
-                    $self->district < 10
-                    ? 'D0' . $self->district
-                    : 'D' . $self->district;
-                my $path = $self->output_dir;
-                for (  $d, $info->{'freeway_id'}, $info->{'freeway_dir'}, $sanitized_name){
-                    if($_){
-                        $path .=  q{/} . $_;
-                    }
-                }
-                if ( !-e $path ) {
-                    make_path($path);
-                }
-                my $filename = join q{_}, $id, $info->{'vdstype'}, $self->year;
-                $filename .= '.txt';
-                $absname = join q{/}, $path, $filename;
+                $absname = $self->make_filename($id);
                 $self->handles->{$id}=$absname;
             }
             #open for appending
