@@ -4,6 +4,14 @@ PeMS distributes its raw data on a daily basis.  For CalVAD, it makes better sen
 
 The output files are stashed according to the metadata that is known about the detector.  At a minimum they will be written in a subdirectory named after the detector's district (the district is given in the first two numbers of the detector id).  Then if the metadata can be loaded, the detectors will be further sorted by the freeway/highway name, and then the direction, and then the name of the detector.  It is often the case that several types of detectors will share a single name---for example, on ramps, off ramps, mainline, and HOV detectors at a single location.  If none of these things are known, then the detector data will be written to a subdirectory under the district called "_name_".
 
+One important caveat: the metadata in the database must be current
+relative to the raw data you are going to process.  If you have data
+from 2019 and metadata from 2017 in the database, then some detectors
+will be fine, but any new detectors will not be picked up properly.
+So, **BEFORE** running the code in this repo, hop over to the
+`CalVAD-PEMS-StationsParse` repository, download the recent metadata
+from PeMS, and use *that* repo to update the database.
+
 So if you *know* that the database connection is good and that you have all ofthe metadata properly loaded, *and* you keep seeing detectors pop up under the directory '_name_', then perhaps you've found a detector without any metadata in the database.  This isn't good, so go fix that...check the database, ask Caltrans, etc etc.
 
 Pretty much you should use the script 'breakup_pems_raw.pl' to run this code, but just for future reference, here are the major methods you might need to know about.
