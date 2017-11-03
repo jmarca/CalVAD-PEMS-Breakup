@@ -44,6 +44,70 @@ Spreadsheet parsing modules.
 dzil listdeps --missing | cpanm --sudo
 ```
 
+## Moops, Kavorka, and Devel::CallParser
+
+As of this writing (November 2017), `Devel::CallParser` has a bug that
+causes Kavorka and Moops to fail installation.  The problem is known,
+but the maintainer of Devel::CallParser is MIA.
+
+The fix is as follows.
+
+### Download Devel::CallParser
+
+Get Devel::CallParser from
+https://cpan.metacpan.org/authors/id/Z/ZE/ZEFRAM/Devel-CallParser-0.002.tar.gz
+
+Download the most recent patch from this bug thread:
+https://rt.cpan.org/Public/Bug/Display.html?id=110623
+
+Alternately, just use the copy included in this repository.
+
+Unzip the Devel-CallParser file
+
+```
+tar xvf Devel-CallParser-0.002.tar.gz
+```
+
+Change into the directory and apply the patch
+
+```
+cd Devel-CallParser-0.002
+patch -p 1 < ../0002-Fix-a-pad-problem-with-Perl-5.24.1-on-unthreaded-build.patch
+```
+
+(Note that the patch command needs the patch.  I put it in the
+directory above the Devel-CallParser code, but wherever it is, you
+need to put in the correct path to the patch.)
+
+The patch should apply cleanly.  If it doesn't check the bug thread
+linked above.  Then make and install the code.
+
+```
+perl Build.PL
+./Build
+./Build test
+
+... Result: PASS
+
+sudo ./Build install
+```
+
+After that patched version of Devel-CallParser is installed, Moops
+(and Kavorka) should install cleanly
+
+```
+cpanm --sudo Moops Kavorka
+```
+
+And with that, all of the dependencies required for this package
+should be good to go (assuming you also manually installed the package
+`spatialvds_schema` (from https://github.com/jmarca/spatialvds_schema)
+
+```
+dzil listdeps --missing | cpanm --sudo
+```
+
+
 ## Testing
 
 Configuration of the tests is done using the file `test.config.json.
